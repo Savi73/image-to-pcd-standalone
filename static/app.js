@@ -84,9 +84,24 @@ function updateSelection() {
 
 async function requestJson(url, options) {
   const response = await fetch(url, options);
-  const payload = await response.json();
+  const responseText = await response.text();
+  let payload;
+  try {
+    payload = responseText ? JSON.parse(responseText) : null;
+  } catch {
+    const detail = responseText.trim().slice(0, 300);
+    throw new Error(
+      `The server returned a non-JSON response (HTTP ${response.status})${detail ? `: ${detail}` : "."}`,
+    );
+  }
+  if (!payload || typeof payload !== "object") {
+    throw new Error(
+      `The server returned an empty response (HTTP ${response.status}). ` +
+      "The request may have timed out or the app may have restarted. Check the Render service logs.",
+    );
+  }
   if (!response.ok) {
-    throw new Error(payload.error || "The request could not be completed.");
+    throw new Error(payload.error || `The request failed (HTTP ${response.status}).`);
   }
   return payload;
 }
