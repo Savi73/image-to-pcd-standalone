@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: roomscan
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: /bin/sh -c 'exec gunicorn --bind 0.0.0.0:${PORT:-10000} --workers 1 --threads 2 --timeout 21600 app:app'
+    plan: 2c-8g
+    healthCheckPath: /api/health
+    envVars:
+      - key: DEPTH_MODEL_REPO
+        sync: false
+      - key: HF_TOKEN
+        sync: false

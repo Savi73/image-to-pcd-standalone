@@ -2,11 +2,11 @@
 
 Flask==3.0.0
 gunicorn==22.0.0
-huggingface-hub==0.23.1
+huggingface-hub>=1.16.0,<3.0
 matplotlib==3.8.2
 numpy==1.26.2
 omegaconf==2.3.0
-open3d==0.18.0
+open3d==0.19.0
 opencv-python-headless==4.9.0.80
 Pillow==10.1.0
 requests==2.31.0
@@ -15,3 +15,5 @@ timm==0.6.13
 torch==2.3.0+cpu
 torchvision==0.18.0+cpu
 tqdm==4.65.0
+gradio>=4.44.1
+spaces==0.51.3
