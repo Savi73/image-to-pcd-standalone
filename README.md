@@ -59,8 +59,8 @@ For the Gradio interface, run `python gradio_app.py` and open the local URL it p
 The root `render.yaml` defines a Docker web service for the Flask UI. In Render,
 create a Blueprint from this repository and provide `DEPTH_MODEL_REPO` (the
 Hugging Face model repository containing both checkpoints) and `HF_TOKEN` (a
-read token for that repository) when prompted. The Docker image disables Xet
-downloads and uses the standard Hub download path. The service uses Render's
+read token for that repository) when prompted. The Docker image and app disable
+Xet downloads and use the standard Hub download path. The service uses Render's
 `2c-8g` plan; model inference needs more memory than the free plan provides.
 
 #### Hugging Face Gradio Space

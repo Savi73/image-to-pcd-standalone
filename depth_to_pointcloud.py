@@ -1,5 +1,8 @@
 import argparse
 import os
+
+os.environ["HF_HUB_DISABLE_XET"] = "1"
+
 import glob
 from pathlib import Path
 import torch

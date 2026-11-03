@@ -6,6 +6,8 @@ import threading
 import uuid
 from pathlib import Path
 
+os.environ["HF_HUB_DISABLE_XET"] = "1"
+
 import gradio as gr
 import spaces
 from huggingface_hub import hf_hub_download
