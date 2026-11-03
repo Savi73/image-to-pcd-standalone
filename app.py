@@ -1,3 +1,4 @@
+import hashlib
 import re
 import base64
 import subprocess
@@ -17,6 +18,10 @@ MAX_UPLOAD_SIZE = 500 * 1024 * 1024
 MAX_IMAGE_COUNT = 40
 JOB_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 pipeline_lock = threading.Lock()
+STATIC_ASSET_VERSION = hashlib.sha256(
+    (ROOT / "static" / "app.js").read_bytes()
+    + (ROOT / "static" / "styles.css").read_bytes()
+).hexdigest()[:12]
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_SIZE
@@ -53,7 +58,11 @@ def run_pipeline(command):
 
 @app.get("/")
 def index():
-    return render_template("index.html")
+    response = make_response(
+        render_template("index.html", asset_version=STATIC_ASSET_VERSION)
+    )
+    response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 @app.get("/api/health")
