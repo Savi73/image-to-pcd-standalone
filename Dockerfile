@@ -4,7 +4,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     MPLBACKEND=Agg \
     PIP_NO_CACHE_DIR=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    HF_HUB_DISABLE_XET=1
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \

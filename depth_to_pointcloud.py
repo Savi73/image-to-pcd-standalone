@@ -76,6 +76,7 @@ def resolve_checkpoint_path(checkpoint_path):
     from huggingface_hub import hf_hub_download
 
     filename = os.environ.get("DEPTH_MODEL_FILENAME", checkpoint.name)
+    checkpoint.parent.mkdir(parents=True, exist_ok=True)
     return Path(hf_hub_download(
         repo_id=model_repo,
         filename=filename,
