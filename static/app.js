@@ -83,7 +83,7 @@ function updateSelection() {
 }
 
 async function requestJson(url, options) {
-  const response = await fetch(url, options);
+  const response = await fetch(url, { cache: "no-store", ...options });
   const responseText = await response.text();
   let payload;
   try {
@@ -104,6 +104,15 @@ async function requestJson(url, options) {
     throw new Error(payload.error || `The request failed (HTTP ${response.status}).`);
   }
   return payload;
+}
+
+async function runPipeline(url) {
+  await requestJson(url, { method: "POST" });
+  while (true) {
+    await new Promise((resolve) => window.setTimeout(resolve, 2000));
+    const payload = await requestJson(url);
+    if (payload.status !== "queued" && payload.status !== "running") return payload;
+  }
 }
 
 function drawPointCloud() {
@@ -264,7 +273,7 @@ convertButton.addEventListener("click", async () => {
   notice.hidden = true;
   setBusy(true, "Building your point clouds", "Estimating metric depth for each image. The first run may take longer.");
   try {
-    const payload = await requestJson(`/api/jobs/${jobId}/convert`, { method: "POST" });
+    const payload = await runPipeline(`/api/jobs/${jobId}/convert`);
     converted = true;
     registerButton.disabled = false;
     updateSteps(3);
@@ -282,7 +291,7 @@ registerButton.addEventListener("click", async () => {
   results.hidden = true;
   setBusy(true, "Stitching the room together", "Aligning scans and extracting the 2D floor plan.");
   try {
-    const payload = await requestJson(`/api/jobs/${jobId}/register`, { method: "POST" });
+    const payload = await runPipeline(`/api/jobs/${jobId}/register`);
     downloadList.replaceChildren();
     payload.files.forEach((file) => {
       if (file.name === "floor_plan_preview.png") {

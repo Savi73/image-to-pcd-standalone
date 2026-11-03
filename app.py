@@ -1,6 +1,7 @@
-import hashlib
-import re
 import base64
+import hashlib
+import logging
+import re
 import subprocess
 import sys
 import threading
@@ -18,6 +19,8 @@ MAX_UPLOAD_SIZE = 500 * 1024 * 1024
 MAX_IMAGE_COUNT = 40
 JOB_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 pipeline_lock = threading.Lock()
+pipeline_jobs = {}
+pipeline_jobs_lock = threading.Lock()
 STATIC_ASSET_VERSION = hashlib.sha256(
     (ROOT / "static" / "app.js").read_bytes()
     + (ROOT / "static" / "styles.css").read_bytes()
@@ -27,33 +30,79 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_SIZE
 
 
+def pipeline_job_key(job_id, operation):
+    return f"{job_id}:{operation}"
+
+
+def pipeline_job_status(key):
+    with pipeline_jobs_lock:
+        state = pipeline_jobs.get(key)
+        return dict(state) if state else None
+
+
+def run_pipeline_in_background(key, command):
+    with pipeline_jobs_lock:
+        state = pipeline_jobs.get(key)
+        if state and state["status"] in {"queued", "running"}:
+            return jsonify(status=state["status"]), 202
+        pipeline_jobs[key] = {"status": "queued"}
+
+    def run():
+        if not pipeline_lock.acquire(blocking=False):
+            with pipeline_jobs_lock:
+                pipeline_jobs[key] = {
+                    "status": "failed",
+                    "error": "Another conversion or registration is already running.",
+                }
+            return
+
+        with pipeline_jobs_lock:
+            pipeline_jobs[key] = {"status": "running"}
+
+        try:
+            result = subprocess.run(
+                command,
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                timeout=6 * 60 * 60,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as error:
+            logging.error("Pipeline timed out for %s: %s", key, error)
+            with pipeline_jobs_lock:
+                pipeline_jobs[key] = {
+                    "status": "failed",
+                    "error": f"Processing timed out: {error}",
+                }
+        except OSError as error:
+            logging.exception("Could not run pipeline for %s", key)
+            with pipeline_jobs_lock:
+                pipeline_jobs[key] = {
+                    "status": "failed",
+                    "error": f"Could not start processing: {error}",
+                }
+        else:
+            if result.returncode:
+                details = (result.stderr or result.stdout).strip()
+                details = details[-4000:]
+                logging.error("Pipeline failed for %s: %s", key, details)
+                state = {"status": "failed", "error": details or "The processing command failed."}
+            else:
+                state = {"status": "completed"}
+            with pipeline_jobs_lock:
+                pipeline_jobs[key] = state
+        finally:
+            pipeline_lock.release()
+
+    threading.Thread(target=run, daemon=True).start()
+    return jsonify(status="queued"), 202
+
+
 def job_directory(job_id):
     if not JOB_ID_PATTERN.fullmatch(job_id):
         raise ValueError("Invalid job ID.")
     return JOB_ROOT / job_id
-
-
-def run_pipeline(command):
-    if not pipeline_lock.acquire(blocking=False):
-        return jsonify(error="Another conversion or registration is already running."), 409
-    try:
-        result = subprocess.run(
-            command,
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            timeout=6 * 60 * 60,
-            check=False,
-        )
-    except subprocess.TimeoutExpired as error:
-        return jsonify(error=f"Processing timed out: {error}"), 504
-    finally:
-        pipeline_lock.release()
-
-    if result.returncode:
-        details = (result.stderr or result.stdout).strip()
-        return jsonify(error=details or "The processing command failed."), 500
-    return jsonify(message=result.stdout.strip())
 
 
 @app.get("/")
@@ -132,10 +181,29 @@ def convert_images(job_id):
         "--output-dir",
         str(point_cloud_directory),
     ]
-    response = run_pipeline(command)
-    if isinstance(response, tuple):
-        return response
-    files = sorted(point_cloud_directory.glob("*.ply"))
+    key = pipeline_job_key(job_id, "convert")
+    if pipeline_job_status(key):
+        return conversion_status(job_id)
+    return run_pipeline_in_background(key, command)
+
+
+@app.get("/api/jobs/<job_id>/convert")
+def conversion_status(job_id):
+    try:
+        paths = job_directory(job_id)
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
+    state = pipeline_job_status(pipeline_job_key(job_id, "convert"))
+    if not state:
+        return jsonify(
+            error="The conversion status is unavailable. The service may have restarted; try converting again."
+        ), 404
+    if state["status"] == "failed":
+        return jsonify(error=state["error"]), 500
+    if state["status"] != "completed":
+        return jsonify(status=state["status"]), 202
+
+    files = sorted((paths / "point_clouds").glob("*.ply"))
     if not files:
         return jsonify(error="The conversion completed without producing point clouds."), 500
     return jsonify(message="Images converted to point clouds.", count=len(files))
@@ -161,14 +229,32 @@ def register_point_clouds(job_id):
         str(output_directory),
         "--no-visualization",
     ]
-    response = run_pipeline(command)
-    if isinstance(response, tuple):
-        return response
+    key = pipeline_job_key(job_id, "register")
+    if pipeline_job_status(key):
+        return registration_status(job_id)
+    return run_pipeline_in_background(key, command)
+
+
+@app.get("/api/jobs/<job_id>/register")
+def registration_status(job_id):
+    try:
+        paths = job_directory(job_id)
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
+    state = pipeline_job_status(pipeline_job_key(job_id, "register"))
+    if not state:
+        return jsonify(
+            error="The registration status is unavailable. The service may have restarted; try registering again."
+        ), 404
+    if state["status"] == "failed":
+        return jsonify(error=state["error"]), 500
+    if state["status"] != "completed":
+        return jsonify(status=state["status"]), 202
 
     files = [
         {"name": name, "url": f"/api/jobs/{job_id}/files/{name}"}
         for name in ("complete_room_merged.ply", "extracted_floor_plan.ply", "floor_plan_preview.png")
-        if (output_directory / name).is_file()
+        if ((paths / "results") / name).is_file()
     ]
     if len(files) != 3:
         return jsonify(error="Registration finished without producing all expected output files."), 500

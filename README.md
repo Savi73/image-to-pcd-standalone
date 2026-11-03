@@ -53,6 +53,9 @@ python app.py
 
 Open `http://127.0.0.1:5000`, select at least two JPG room photos, and follow the upload, point-cloud conversion, and registration steps. After registration, inspect the merged point cloud in the interactive home-page preview: drag to orbit and scroll to zoom. The merged point cloud and extracted floor-plan point cloud are also available to download. The UI requires the dependencies in `requirements.txt`, the camera calibration file, and the indoor model checkpoint.
 
+Conversion and registration run as background jobs so long-running model
+inference does not hold an HTTP request open; the browser polls for completion.
+
 For the Gradio interface, run `python gradio_app.py` and open the local URL it prints. Both interfaces require the model checkpoints and camera calibration file.
 
 #### Render deployment
