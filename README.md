@@ -69,11 +69,12 @@ Xet downloads and use the standard Hub download path. The service uses Render's
 #### Hugging Face Gradio Space
 The repository is configured as a Gradio Space and supports ZeroGPU for depth
 inference. Select ZeroGPU in the Space's hardware settings; the `@spaces.GPU`
-wrapper reserves it while the scan callback runs. Its `requirements.txt` is
-self-contained because the Space build only makes that file available while
-installing dependencies. The Dockerfile uses `requirements-space.txt`. The
-Space entry point is `gradio_app.py`, and ZeroGPU requires Python 3.12.12 here.
-To deploy:
+wrapper reserves it while the scan callback runs, with a 400-second requested
+duration to leave headroom for ZeroGPU's hardware-adjusted request limit. Its
+`requirements.txt` is self-contained because the Space build only makes that
+file available while installing dependencies. The Dockerfile uses
+`requirements-space.txt`. The Space entry point is `gradio_app.py`, and ZeroGPU
+requires Python 3.12.12 here. To deploy:
 
 1. Create a **Gradio Space** on Hugging Face. This model requires substantial RAM and CPU Basic may run out of memory; use hardware with enough memory or a GPU for practical inference. Check current hardware pricing before selecting a paid option.
 2. In a terminal at the project root, install and authenticate the Hugging Face CLI, then upload the source. Replace `<username>` and `<space-name>` with your Hugging Face account and new Space name:

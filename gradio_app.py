@@ -98,7 +98,7 @@ def run_command(command):
         raise gr.Error(details[-4000:] or "The processing command failed.")
 
 
-@spaces.GPU(duration=600)
+@spaces.GPU(duration=400)
 def create_room_scan(image_files):
     validate_images(image_files)
     if not pipeline_lock.acquire(blocking=False):
